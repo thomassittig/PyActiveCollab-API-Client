@@ -15,7 +15,7 @@ setup(
       classifiers=[
           "License :: MIT",
           "Programming Language :: Python",
-          "Development Status :: 1 - Alpha",
+          "Development Status :: 1 - Beta",
           "Intended Audience :: Developers",
           "Topic :: Internet",
           ],
@@ -25,4 +25,3 @@ setup(
         'setuptools',
         ],
 )
-
