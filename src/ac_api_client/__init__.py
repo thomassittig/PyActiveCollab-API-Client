@@ -9,19 +9,25 @@ log = logging.getLogger(__name__)
 
 __all__ = ("connect","Credentials",)
 
+PATTERN_DATETIME = "%Y-%m-%d %H:%M:%S"
+PATTERN_DATE = "%Y-%m-%d"
 
 def _normalize_xpath_result(data, callback=None):
-    data = "".join(data).strip()
-    if not callback is None:
-        data = callback(data)
-    return data
+    try:
+        data = "".join(data).strip()
+        if not callback is None:
+            data = callback(data)
+        return data
+    except:
+        log.error(u"unexcepted error while normalizing a excepted xpath-query-result", exc_info=True)
+        return None
 
 def _parse_boolean(data):
     try: return int(data) == 1
     except: return False
         
 
-def _parse_timestamp(string, pattern="%Y-%m-%d %H:%M:%S"):
+def _parse_datetime(string, pattern=PATTERN_DATETIME):
     return datetime.datetime.strptime(string, pattern)
 
 def _validate_container_type(data):
@@ -144,26 +150,142 @@ class ProjectServiceCall(ServiceCallDescriptor):
 
     def result_to_data(self, callback_result):
         doc = callback_result
+        
         return dict(id=_normalize_xpath_result(doc.xpath("/project/id/text()"), int),
                     name=_normalize_xpath_result(doc.xpath("/project/name/text()")),
                     overview=_normalize_xpath_result(doc.xpath("/project/overview/text()")),
                     status=_normalize_xpath_result(doc.xpath("/project/status/text()")),
                     type=_normalize_xpath_result(doc.xpath("/project/type/text()")),
                     permalink=_normalize_xpath_result(doc.xpath("/project/permalink/text()")),
-                    leader=dict(),
+                    leader=User.create_from_xml(doc.xpath("/project/leader")[0]),
                     company=dict(),
                     group=dict(),
                     logged_user_permissions=dict(),
                     icon_url=_normalize_xpath_result(doc.xpath("/project/icon_url/text()")),
                     )
 
+class TicketsServiceCall(ServiceCallDescriptor):
+    """ handles the call for the '/project/*/tickets'-service
+    
+    build and executes the service call
+    handles and transforms the result-list into an list of Ticket-objects
+    """
+
+    def result_to_data(self, callback_result):
+        """ parse the xml-results into a list of ticket-objects
+        """
+        doc = callback_result
+        tickets = []
+        
+        for node in doc.xpath("/tickets/ticket"):
+            tickets.append(Ticket.create_from_xml(node))
+                           
+        return tickets
+    
+
+class TimeRecordsServiceCall(ServiceCallDescriptor):
+    """ handles the call for the '/project/*/time'-service
+    
+    build and executes the service call
+    handles and transforms the result-list into an list of Ticket-objects
+    """
+
+    def result_to_data(self, callback_result):
+        """ parse the xml-results into a list of ticket-objects
+        """
+        doc = callback_result
+        tickets = []
+        
+        for node in doc.xpath("/time_records/time_record"):
+            tickets.append(TimeRecord.create_from_xml(node))
+                           
+        return tickets
+
+
 class Services(object):
     """ a list of all supported activecollab-api calls
     """
     LOAD_PROJECT = ProjectServiceCall(u"/projects/${project_id}")
+    LIST_TICKETS = TicketsServiceCall(u"/projects/${project_id}/tickets")
+    LIST_TIMERECORDS = TimeRecordsServiceCall(u"/projects/${project_id}/time")
 
+class TimeRecord(object):
+    """ wrapping the data about an timerecord and delivers additional functions
+    
+    this is no dao object, so most property are already available at the time a instance is created
+    """
+    def __init__(self, data):
+        self._data = data
+
+    @classmethod
+    def create_from_xml(self, doc):
+        return self(data=dict(id=_normalize_xpath_result(doc.xpath("id/text()"), int),
+                              
+                              ))
+        
+    id = forward_property("id")
+class Ticket(object):
+    """ wrapping the data about an ticket and delivers additional functions
+    
+    this is no dao object, so most property are already available at the time a instance is created
+    """
+    def __init__(self, data):
+        self._data = data
+
+    @classmethod
+    def create_from_xml(self, doc):
+        return self(data=dict(id=_normalize_xpath_result(doc.xpath("id/text()"), int),
+                              type = _normalize_xpath_result(doc.xpath("type/text()")),
+                              name = _normalize_xpath_result(doc.xpath("name/text()")),
+                              body = _normalize_xpath_result(doc.xpath("body/text()")),
+                              state = _normalize_xpath_result(doc.xpath("state/text()"), int),
+                              visibility = _normalize_xpath_result(doc.xpath("visibility/text()"), _parse_boolean),
+                              created_on = _normalize_xpath_result(doc.xpath("created_on/text()"), _parse_datetime ),
+                              created_by_id = _normalize_xpath_result(doc.xpath("created_by_id/text()"), int),
+                              updated_on = _normalize_xpath_result(doc.xpath("updated_on/text()"), _parse_datetime),
+                              updated_by_id = _normalize_xpath_result(doc.xpath("updated_by_id/text()"), int),
+                              version = _normalize_xpath_result(doc.xpath("version/text()"), int),
+                              permalink = _normalize_xpath_result(doc.xpath("permalink/text()")),
+                              priority = _normalize_xpath_result(doc.xpath("priority/text()"), int),
+                              due_on = _normalize_xpath_result(doc.xpath("due_on/text()"), lambda d: _parse_datetime(d, PATTERN_DATE)),
+                              completed_on = _normalize_xpath_result(doc.xpath("completed_on/text()"), _parse_datetime),
+                              completed_by_id = _normalize_xpath_result(doc.xpath("completed_by_id/text()"), int),
+                              tags = _normalize_xpath_result(doc.xpath("tags/text()")),
+                              project_id = _normalize_xpath_result(doc.xpath("project_id/text()"), int),
+                              parent_id = _normalize_xpath_result(doc.xpath("parent_id/text()"), int),
+                              milestone_id = _normalize_xpath_result(doc.xpath("milestone_id/text()"), int),
+                              #permissions = _normalize_xpath_result(doc.xpath("permissions/text()"), int),
+                              ticket_id = _normalize_xpath_result(doc.xpath("ticket_id/text()"), int),
+                              ))
+        
+    id = forward_property("id")
+    type = forward_property("type")
+    name = forward_property("name")
+    body = forward_property("body")
+    state = forward_property("state")
+    visibility = forward_property("visibility") 
+    created_on = forward_property("created_on")
+    created_by_id = forward_property("created_by_id")
+    updated_on = forward_property("updated_on")
+    updated_by_id = forward_property("updated_by_id")
+    version = forward_property("version")
+    permalink = forward_property("permalink")
+    priority = forward_property("priority")
+    due_on = forward_property("due_on")
+    completed_on = forward_property("completed_on")
+    completed_by_id = forward_property("completed_by_id")
+    tags = forward_property("tags")
+    project_id = forward_property("project_id")
+    parent_id = forward_property("parent_id")
+    milestone_id = forward_property("milestone_id")
+    permissions = forward_property("permissions")
+    ticket_id = forward_property("ticket_id")
 
 class User(object):
+    """ wrapping the data about an user and delivers additional functions
+    
+    this is no dao object, so most property are already available at the time a instance is created
+    """
     def __init__(self, data):
         self._data = data
     
@@ -173,7 +295,7 @@ class User(object):
                               first_name=_normalize_xpath_result(doc.xpath(".//first_name/text()")),
                               last_name=_normalize_xpath_result(doc.xpath(".//last_name/text()")),
                               email=_normalize_xpath_result(doc.xpath(".//email/text()")),
-                              last_visit_on=_normalize_xpath_result(doc.xpath(".//last_visit_on/text()"), _parse_timestamp),
+                              last_visit_on=_normalize_xpath_result(doc.xpath(".//last_visit_on/text()"), _parse_datetime),
                               permalink=_normalize_xpath_result(doc.xpath(".//permalink/text()")),
                               role_id=_normalize_xpath_result(doc.xpath(".//role_id/text()"), int),
                               is_administrator=_normalize_xpath_result(doc.xpath(".//is_administrator/text()"), _parse_boolean),
@@ -202,17 +324,52 @@ class Project(DAO):
     """
     def __init__(self, *args, **kvargs):
         super(Project, self).__init__(*args, **kvargs)
+        self._time_records = None
+        self._tickets = None
         
     def _refresh(self):
         self._data = Services.LOAD_PROJECT.call(self._proxy,project_id=self.id)
         
     name = lazy_property("name")
+    overview = lazy_property("overview")
+    status = lazy_property("status")
+    type = lazy_property("type")
+    permalink = lazy_property("permalink")
+    leader = lazy_property("leader")
+    company = lazy_property("company")
+    group = lazy_property("group"),
+    logged_user_permissions = lazy_property("logged_user_permissions")
+    icon_url = lazy_property("icon_url")
+    
+    
+    @property
+    def time_records(self):
+        if self._time_records is None:
+            manager = ProjectManager(self._proxy)
+            self._time_records = manager.list_time_records_for_project(self.id)
+        return self._time_records
+        
+    @property
+    def tickets(self):
+        if self._tickets is None:
+            manager = ProjectManager(self._proxy)
+            self.timerecords = manager.list_tickets_for_project(self.id)
+        return self._tickets
+        
+
+    
 
 class ProjectManager(object):
-    """ distributes methods to load one or more objects
+    """ distributes methods to load one or more projects
     """
     def __init__(self, proxy):
         self._proxy = proxy
+
+    def list_tickets_for_project(self, project_id):
+        return Services.LIST_TICKETS.call(self._proxy, project_id=project_id)
+    
+    def list_time_records_for_project(self, project_id):
+        return Services.LIST_TIMERECORDS.call(self._proxy, project_id=project_id)
     
     def load(self, id):
         """ returns a lazy-loading project-object

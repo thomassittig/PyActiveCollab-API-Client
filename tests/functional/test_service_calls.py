@@ -13,7 +13,7 @@ class TestProjectServiceCall(unittest.TestCase):
         service = ac_api_client.Services.LOAD_PROJECT
 
         proxy = self._mocker.CreateMock(ac_api_client.Proxy)
-        proxy.call(u"/projects/1").AndReturn("""<?xml version="1.0" encoding="UTF-8"?><project><id>1</id><name>foo</name></project>""")
+        proxy.call(u"/projects/1").AndReturn("""<?xml version="1.0" encoding="UTF-8"?><project><id>1</id><name>foo</name><leader></leader></project>""")
         
         self._mocker.ReplayAll()
 
@@ -23,3 +23,4 @@ class TestProjectServiceCall(unittest.TestCase):
         self.assertTrue(type(data) is dict)
         self.assertEqual(data["id"],1)
         self.assertEqual(data["name"],u"foo")
+        
