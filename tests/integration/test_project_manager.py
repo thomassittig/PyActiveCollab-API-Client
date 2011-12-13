@@ -12,12 +12,4 @@ class TestProjectManager(unittest.TestCase):
         pass
     
     def test_load(self):
-        proxy = self._mocker.CreateMock(ac_api_client.Proxy)
-        proxy.call(u"/projects/1").AndReturn(None)
-        
-        self._mocker.ReplayAll()
-        
-        manager = ac_api_client.ProjectManager(proxy)
-        project = manager.load(1)
-        
-        self.assertFalse(project is None)
+        pass
