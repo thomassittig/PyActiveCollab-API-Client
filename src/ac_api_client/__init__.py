@@ -2,12 +2,48 @@
 """ ac_api_client - an python client implementation of the restfull webapi of any 
 ActiveCollab-instance (http://www.activecollab.com)
 """
-import logging, re, collections,urllib2, StringIO
+import logging, re, collections,urllib2, StringIO, datetime
 from lxml import etree
 
 log = logging.getLogger(__name__)
 
 __all__ = ("connect","Credentials",)
+
+
+def _normalize_xpath_result(data, callback=None):
+    data = "".join(data).strip()
+    if not callback is None:
+        data = callback(data)
+    return data
+
+def _parse_boolean(data):
+    try: return int(data) == 1
+    except: return False
+        
+
+def _parse_timestamp(string, pattern="%Y-%m-%d %H:%M:%S"):
+    return datetime.datetime.strptime(string, pattern)
+
+def _validate_container_type(data):
+    """ the container as to be a dictionary
+    """
+    return type(data) is dict
+
+def _obj_from_chain(chain_key, current_dom):
+    for attr_name in chain_key.split("."):
+        current_dom = getattr(current_dom, attr_name)
+    
+    if _validate_container_type(current_dom):
+        return current_dom
+    
+    raise TypeError(u"containers has to be from type dict")
+
+def forward_property(name, data_member="_data"):
+    """ forwarding the value to a requested property name, which is is in a separate data-container
+    """
+    def getter(self): return _obj_from_chain(data_member, self).get(name)
+    def setter(self, value): _obj_from_chain(data_member, self)[name] = value
+    return property(getter, setter)
 
 def lazy_property(name, data_member="_data"):
     """ simple property forwarder for handling lazy-loaded property-data
@@ -16,19 +52,6 @@ def lazy_property(name, data_member="_data"):
     
     most possible that this will be a api-call against  
     """
-    def _validate_container_type(data):
-        """ the container as to be a dictionary
-        """
-        return type(data) is dict
-        
-    def _obj_from_chain(chain_key, current_dom):
-        for attr_name in chain_key.split("."):
-            current_dom = getattr(current_dom, attr_name)
-        
-        if _validate_container_type(current_dom):
-            return current_dom
-        
-        raise TypeError(u"containers has to be from type dict")
         
     def getter(self): 
         data = _obj_from_chain(data_member, self).get(name)
@@ -40,7 +63,7 @@ def lazy_property(name, data_member="_data"):
             
     def setter(self, value):
         source = _obj_from_chain(data_member, self) 
-        source[name] = value
+        source
         
         
     return property(getter, setter)
@@ -121,17 +144,17 @@ class ProjectServiceCall(ServiceCallDescriptor):
 
     def result_to_data(self, callback_result):
         doc = callback_result
-        return dict(id=int("".join(doc.xpath("/project/id/text()"))),
-                    name="".join(doc.xpath("/project/name/text()")),
-                    overview="".join(doc.xpath("/project/overview/text()")),
-                    status="".join(doc.xpath("/project/status/text()")),
-                    type="".join(doc.xpath("/project/type/text()")),
-                    permalink="".join(doc.xpath("/project/permalink/text()")),
+        return dict(id=_normalize_xpath_result(doc.xpath("/project/id/text()"), int),
+                    name=_normalize_xpath_result(doc.xpath("/project/name/text()")),
+                    overview=_normalize_xpath_result(doc.xpath("/project/overview/text()")),
+                    status=_normalize_xpath_result(doc.xpath("/project/status/text()")),
+                    type=_normalize_xpath_result(doc.xpath("/project/type/text()")),
+                    permalink=_normalize_xpath_result(doc.xpath("/project/permalink/text()")),
                     leader=dict(),
                     company=dict(),
                     group=dict(),
                     logged_user_permissions=dict(),
-                    icon_url="".join(doc.xpath("/project/icon_url/text()")),
+                    icon_url=_normalize_xpath_result(doc.xpath("/project/icon_url/text()")),
                     )
 
 class Services(object):
@@ -139,6 +162,39 @@ class Services(object):
     """
     LOAD_PROJECT = ProjectServiceCall(u"/projects/${project_id}")
 
+
+class User(object):
+    def __init__(self, data):
+        self._data = data
+    
+    @classmethod
+    def create_from_xml(self, doc):
+        return self(data=dict(id=_normalize_xpath_result(doc.xpath(".//id/text()"), int),
+                              first_name=_normalize_xpath_result(doc.xpath(".//first_name/text()")),
+                              last_name=_normalize_xpath_result(doc.xpath(".//last_name/text()")),
+                              email=_normalize_xpath_result(doc.xpath(".//email/text()")),
+                              last_visit_on=_normalize_xpath_result(doc.xpath(".//last_visit_on/text()"), _parse_timestamp),
+                              permalink=_normalize_xpath_result(doc.xpath(".//permalink/text()")),
+                              role_id=_normalize_xpath_result(doc.xpath(".//role_id/text()"), int),
+                              is_administrator=_normalize_xpath_result(doc.xpath(".//is_administrator/text()"), _parse_boolean),
+                              is_project_manager=_normalize_xpath_result(doc.xpath(".//is_project_manager/text()"), _parse_boolean),
+                              is_people_manager=_normalize_xpath_result(doc.xpath(".//is_people_manager/text()"), _parse_boolean),
+                              token=_normalize_xpath_result(doc.xpath(".//token/text()")),
+                              company_id=_normalize_xpath_result(doc.xpath(".//company_id/text()"),int),
+                              ))
+    
+    id = forward_property("id")
+    first_name = forward_property("first_name")
+    last_name = forward_property("last_name")
+    email_address = forward_property("email")
+    last_visit_on = forward_property("last_visit_on")
+    permalink = forward_property("permalink")
+    role_id = forward_property("role_id")
+    is_administrator = forward_property("is_administrator")
+    is_project_manager = forward_property("is_project_manager")
+    is_people_manager = forward_property("is_people_manager")
+    token = forward_property("token")
+    company_id = forward_property("company_id")
 
 class Project(DAO):
     """ Data-Container for the project-data-related informations

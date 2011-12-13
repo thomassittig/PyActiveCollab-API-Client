@@ -23,5 +23,6 @@ setup(
       license='MIT',
       install_requires=[
         'setuptools',
+        "lxml"
         ],
 )
